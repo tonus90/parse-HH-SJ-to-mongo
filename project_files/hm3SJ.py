@@ -60,15 +60,15 @@ class JobParse:
         url = self.start_url #первый урл стартовый дальше будем менять по кнопке дальше
         cnt = 0
         # cnt_pages = 0
-        while url:  #пока урл сущетсвует делаем
+        while url:  #делаем
             soup = self._get_soup(url) #суп
-            button = soup.find('a', attrs={'class': 'icMQ_ bs_sM _3ze9n f-test-button-dalshe f-test-link-Dalshe'}) #вытащим кнопку дальше
+            button = soup.find('a', attrs={'rel': 'next'}) #вытащим кнопку дальше
             try:
                 url = urljoin(self.base_url, button.attrs.get('href', ''))
             except AttributeError as err:
                 print(err)
                 url = False
-            for vac in soup.find_all('div', attrs={'class': "iJCa5 f-test-vacancy-item _1fma_ undefined _2nteL"}):
+            for vac in soup.find_all('div', attrs={'class': "f-test-search-result-item"}):
                 vacancies_data = self._parse(vac)
                 cnt+=1
                 self._save(vacancies_data)
@@ -77,16 +77,17 @@ class JobParse:
     def _get_template(self): #получим шаблон для словаря
 
         return {
-            'name': lambda vac: vac.find('div', attrs={'class': "_3mfro PlM3e _2JVkc _3LJqf"}).text,
-            'url': lambda vac: urljoin(self.base_url, vac.find('div', attrs={'class': "_3mfro PlM3e _2JVkc _3LJqf"}).find('a', attrs={'target': "_blank"}).attrs.get('href', '')),
-            'min_sal': lambda vac: self._get_salary(vac.find('span', attrs={'class': "_1OuF_ _1qw9T f-test-text-company-item-salary"}))[0], #поправил метод для зарплат, теперь один метод.
-            'max_sal': lambda vac: self._get_salary(vac.find('span', attrs={'class': "_1OuF_ _1qw9T f-test-text-company-item-salary"}))[1],
-            'valuta': self._get_valuta, #валюту тоже можно было бы обработать в том же методе, что и зп, но пусть будет отдельно для надежности
+            'name': lambda vac: vac.find('span', attrs={'class': "_1Ijga"}).text,
+            'url': lambda vac: urljoin(self.base_url, vac.find('a', attrs={'class': "_1IHWd f-test-link-Plotnik-stolyar YrERR HyxLN"}).attrs.get('href', '')),
+            'min_sal': lambda vac: self._get_salary(vac.find('span', attrs={'class': "_2eYAG _1nqY_ _249GZ _1jb_5 _1dIgi"}))[0], #поправил метод для зарплат, теперь один метод.
+            'max_sal': lambda vac: self._get_salary(vac.find('span', attrs={'class': "_2eYAG _1nqY_ _249GZ _1jb_5 _1dIgi"}))[1],
+            'valuta': lambda vac: self._get_valuta(vac.find('span', attrs={'class': "_2eYAG _1nqY_ _249GZ _1jb_5 _1dIgi"})), #валюту тоже можно было бы обработать в том же методе, что и зп, но пусть будет отдельно для надежности
         }
 
 
     def _get_salary(self, work): #получим зп
-        sal = work.find('span', attrs={'class': '_3mfro _2Wp8I PlM3e _2JVkc _2VHxz'}).text
+        # sal = work.find('span', attrs={'class': '_3mfro _2Wp8I PlM3e _2JVkc _2VHxz'}).text
+        sal = work.text
         if sal.lower()=='по договоренности':
             return None
         my_list = sal.split()
@@ -110,8 +111,9 @@ class JobParse:
             return (0, max_s) #и вернем кортеж для максимальной зп, где второй эл будет None
 
     def _get_valuta(self, vac): #получим валюту
-        work = vac.find('span', attrs={'class': "_1OuF_ _1qw9T f-test-text-company-item-salary"})
-        sal = work.find('span', attrs={'class': '_3mfro _2Wp8I PlM3e _2JVkc _2VHxz'}).text
+        # work = vac.find('span', attrs={'class': "_1OuF_ _1qw9T f-test-text-company-item-salary"})
+        # sal = work.find('span', attrs={'class': '_3mfro _2Wp8I PlM3e _2JVkc _2VHxz'}).text
+        sal = vac.text
         if sal.lower() == 'по договоренности':
             return None
         my_list = sal.split()
@@ -130,7 +132,7 @@ class JobParse:
 if __name__ == '__main__':
     name = input('Введите должность: ')
     # max_pages = input('Сколько страниц сканрировать?: ')
-    url = f'https://www.superjob.ru/vacancy/search/?keywords={name}'
+    url = f'https://www.superjob.ru/vacancy/search/?keywords={name}&noGeo=1'
 
     client = MongoClient('localhost', 27017)
 

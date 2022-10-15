@@ -20,7 +20,7 @@ from urllib.parse import urljoin
 from pymongo import MongoClient
 
 class JobParse:
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:85.0) Gecko/20100101 Firefox/85.0'}
+    headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36'}
     base_url = 'https://hh.ru'
 
     def __init__(self, start_url: str, client):
@@ -34,11 +34,10 @@ class JobParse:
             response = requests.get(url, headers=self.headers)
             if response.status_code == 200:
                 return response
-            sleep(2)
 
     def _get_soup(self, url):
-        response = self._get_response(url)
-        return BeautifulSoup(response.text, 'html.parser')
+        response = self._get_response(url).content.decode('utf-8')
+        return BeautifulSoup(response, 'html.parser')
 
     def _parse(self, vacancy):
         data = {}
@@ -64,14 +63,14 @@ class JobParse:
         cnt_pages = 0
         while url:
             soup = self._get_soup(url)
-            get = soup.find('a', attrs={'class': 'bloko-button HH-Pager-Controls-Next HH-Pager-Control'})
+            get = soup.find('a', attrs={'data-qa': 'pager-next'})
             try:
                 url = urljoin(self.base_url, get.attrs.get('href', ''))
             except AttributeError as err:
                 print(err)
                 url = False
-            catalog_vac = soup.find('div', attrs={'class': "vacancy-serp"})
-            for vac in catalog_vac.find_all('div', attrs={'class': "vacancy-serp-item"}):
+            catalog_vac = soup.find('div', attrs={'data-qa': "vacancy-serp__results"})
+            for vac in catalog_vac.find_all('div', attrs={'class': "serp-item"}):
                 vacancies_data = self._parse(vac)
                 cnt += 1
                 self._save(vacancies_data)
@@ -81,16 +80,16 @@ class JobParse:
 
     def _get_template(self):
         return {
-            'name': lambda vac: vac.find('a', attrs={'class': "bloko-link HH-LinkModifier HH-VacancyActivityAnalytics-Vacancy"}).text,
-            'url': lambda vac: vac.find('a', attrs={'class': "bloko-link HH-LinkModifier HH-VacancyActivityAnalytics-Vacancy"}).attrs.get('href', ''),
-            'min_sal': lambda vac: self._get_salary(vac.find('div', attrs={'class': 'vacancy-serp-item__sidebar'}))[0], #теперь один метод для зп
-            'max_sal': lambda vac: self._get_salary(vac.find('div', attrs={'class': 'vacancy-serp-item__sidebar'}))[1],
-            'valuta': self._get_valuta,
+            'name': lambda vac: vac.find('a', attrs={'class': "serp-item__title"}).text,
+            'url': lambda vac: vac.find('a', attrs={'class': "serp-item__title"}).attrs.get('href', ''),
+            'min_sal': lambda vac: self._get_salary(vac.find('span', attrs={'data-qa': 'vacancy-serp__vacancy-compensation'}))[0], #теперь один метод для зп
+            'max_sal': lambda vac: self._get_salary(vac.find('span', attrs={'data-qa': 'vacancy-serp__vacancy-compensation'}))[1],
+            'valuta': lambda vac: self._get_valuta(vac.find('span', attrs={'data-qa': 'vacancy-serp__vacancy-compensation'})),
         }
 
     def _get_salary(self, work):
         try:
-            sal = work.find('span', attrs={'class': 'bloko-section-header-3 bloko-section-header-3_lite'}).text
+            sal = work.text
         except Exception as err:
             print(err)
             min_s = None
@@ -110,15 +109,18 @@ class JobParse:
         elif my_list[0] == 'до':
             min_s = None
             max_s = float(f'{my_list[1]}')
+        elif '–' in my_list:
+            min_s = float(f'{my_list[0]+my_list[1]}')
+            max_s = float(f'{my_list[3]+my_list[4]}')
         else:
             min_s = None
             max_s = None
         return (min_s, max_s)
 
-    def _get_valuta(self, vac):
-        work = vac.find('div', attrs={'class': 'vacancy-serp-item__sidebar'})
+    def _get_valuta(self, work):
+        # work = vac.find('div', attrs={'class': 'vacancy-serp-item__sidebar'})
         try:
-            sal = work.find('span', attrs={'class': 'bloko-section-header-3 bloko-section-header-3_lite'}).text
+            sal = work.text
         except Exception as err:
             print(err)
             return None
@@ -130,19 +132,21 @@ class JobParse:
             val = my_list[1]
         elif my_list[0] == 'от' or my_list[0] == 'до':
             if len(my_list) == 4:
-                val = f'{my_list[2]} {my_list[3]}'
+                val = my_list[3]
             else:
                 val = my_list[2]
+        elif '–' in my_list:
+            val = my_list[5]
         else:
             val = None
         return val
 
 
 if __name__ == '__main__':
-    name = input('Введите должность: ')
-    url = f'https://hh.ru/search/vacancy?L_is_autosearch=false&clusters=true&enable_snippets=true&text={name}&page=0'
+    # name = input('Введите должность: ').lower() #тут надо улучшить  для двух слов
+    url = f'https://hh.ru/search/vacancy?search_field=name&search_field=company_name&search_field=description&text=плотник'
 
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.190 Safari/537.36'}
+    headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36'}
 
     client = MongoClient('localhost', 27017)
 
